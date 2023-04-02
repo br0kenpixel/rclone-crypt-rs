@@ -18,15 +18,6 @@ pub type TweakKey = [u8; eme::NAME_CIPHER_BLOCK_SIZE];
 
 #[derive(Clone, Debug)]
 pub struct Cipher {
-    /// The main password or passphrase
-    /// This is used as the main crypto key
-    /// This must be revealed from the obscured password (i.e. password from the rclone config)
-    password: String,
-
-    /// Salt used for nacl
-    /// This must be revealed from the obscured salt (i.e. password2 from the rclone config)
-    salt: String,
-
     /// AES-EME construct. Used for file name crypto.
     eme: AesEme,
 
@@ -81,8 +72,6 @@ impl Cipher {
             name_key: keys.1,
             tweak_key: keys.2,
             eme: AesEme::new(keys.1)?,
-            password,
-            salt,
         })
     }
 
