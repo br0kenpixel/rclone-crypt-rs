@@ -23,16 +23,11 @@ pub struct Cipher {
 
     /// The key used for file encryption.
     /// This is generated from the password and salt using scrypt.
-    pub file_key: FileKey,
-
-    /// The key used for name encryption.
-    /// This is generated from the password and salt using scrypt.
-    /// TODO this might be obfuscation only
-    pub name_key: NameKey,
+    file_key: FileKey,
 
     /// The tweak used for name encryption.
     /// This is generated from the password and salt using scrypt.
-    pub tweak_key: TweakKey,
+    tweak_key: TweakKey,
 }
 
 /// Calculates the keys using scrypt.
@@ -69,7 +64,6 @@ impl Cipher {
 
         Ok(Cipher {
             file_key: keys.0,
-            name_key: keys.1,
             tweak_key: keys.2,
             eme: AesEme::new(keys.1)?,
         })
@@ -165,5 +159,9 @@ impl Cipher {
             .collect::<Result<Vec<String>>>()?;
 
         Ok(segments.join("/"))
+    }
+
+    pub fn get_file_key(&self) -> FileKey {
+        self.file_key
     }
 }

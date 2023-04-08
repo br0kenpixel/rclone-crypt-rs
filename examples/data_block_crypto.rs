@@ -25,7 +25,7 @@ fn main() {
             exit(0);
         }
     };
-    let encrypter = Encrypter::new(&cipher.file_key).unwrap();
+    let encrypter = Encrypter::new(&cipher.get_file_key()).unwrap();
 
     // -- Encryption --
 
@@ -35,7 +35,7 @@ fn main() {
 
     // -- Decryption --
 
-    let decrypter = Decrypter::new(&cipher.file_key, &encrypter.get_file_header()).unwrap();
+    let decrypter = Decrypter::new(&cipher.get_file_key(), &encrypter.get_file_header()).unwrap();
     let decrypted_result = decrypter.decrypt_block(0, &encrypted).unwrap();
     let decrypted_result = String::from_utf8(decrypted_result).unwrap();
 
