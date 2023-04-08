@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use sodiumoxide::crypto::secretbox;
 
-use crate::{FILE_HEADER_SIZE, FILE_MAGIC, calculate_nonce, cipher::FileKey};
+use crate::{calculate_nonce, cipher::FileKey, FILE_HEADER_SIZE, FILE_MAGIC};
 
 /// Encrypter instance for a single file.
 /// This is not a managed writer; it must be assisted with a separate reader that passes
@@ -15,10 +15,10 @@ impl Encrypter {
     pub fn new(file_key: &FileKey) -> Result<Self> {
         sodiumoxide::init().map_err(|_| anyhow!("Could not initialize sodiumoxide"))?;
         let initial_nonce = secretbox::gen_nonce();
-        
+
         Ok(Encrypter {
             key: secretbox::Key(*file_key),
-            initial_nonce
+            initial_nonce,
         })
     }
 
@@ -28,8 +28,8 @@ impl Encrypter {
 
     pub fn get_file_header(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(FILE_HEADER_SIZE);
-        out.copy_from_slice(FILE_MAGIC);
-        out.copy_from_slice(&self.initial_nonce.0);
+        out.extend_from_slice(FILE_MAGIC);
+        out.extend_from_slice(&self.initial_nonce.0);
 
         out
     }

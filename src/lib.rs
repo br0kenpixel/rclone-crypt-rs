@@ -2,8 +2,8 @@ use sodiumoxide::crypto::secretbox;
 
 pub mod cipher;
 pub mod decrypter;
-pub mod encrypter;
 mod eme;
+pub mod encrypter;
 pub mod obscure;
 
 pub const FILE_MAGIC: &[u8] = b"RCLONE\x00\x00";
@@ -14,7 +14,6 @@ pub const FILE_HEADER_SIZE: usize = FILE_MAGIC.len() + FILE_NONCE_SIZE;
 pub const BLOCK_HEADER_SIZE: usize = secretbox::MACBYTES;
 pub const BLOCK_DATA_SIZE: usize = 64 * 1024;
 pub const BLOCK_SIZE: usize = BLOCK_HEADER_SIZE + BLOCK_DATA_SIZE;
-
 
 fn calculate_nonce(initial_nonce: secretbox::Nonce, block_id: u64) -> secretbox::Nonce {
     let mut nonce = secretbox::Nonce(initial_nonce.0);
@@ -49,3 +48,6 @@ fn calculate_nonce(initial_nonce: secretbox::Nonce, block_id: u64) -> secretbox:
 
     nonce
 }
+
+#[cfg(test)]
+mod tests;
