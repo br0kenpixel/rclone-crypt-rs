@@ -1,7 +1,7 @@
+use super::macros::into_io_error;
 use crate::BLOCK_DATA_SIZE;
 use crate::{cipher::Cipher, encrypter::Encrypter};
-use std::io::Result;
-use std::io::Write;
+use std::io::{Error, ErrorKind, Result, Write};
 
 /// A writer which automatically encrypts data from an inner reader.
 ///
@@ -30,18 +30,22 @@ impl<W: Write> EncryptedWriter<W> {
     /// The encrypted data is then passed into the `inner` writer.
     /// Internally a [`Cipher`](Cipher) and [`Encrypter`](Encrypter) are automatically created.
     ///
-    /// # Panics
-    /// If an instance of [`Cipher`](Cipher) or [`Encrypter`](Encrypter) could not be created, this method will panic.
-    pub fn new(inner: W, password: String, salt: String) -> Self {
-        let cipher = Cipher::new(password, salt).unwrap();
-        let encrypter = Encrypter::new(&cipher.get_file_key()).unwrap();
+    /// # Errors
+    /// The returned [`Result`](Result) could only contain an [`Error`](Error) if an instance
+    /// of [`Cipher`](Cipher) or [`Encrypter`](Encrypter) could not be created.
+    pub fn new(inner: W, password: String, salt: String) -> Result<Self> {
+        let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
+        let encrypter = into_io_error!(
+            Encrypter::new(&cipher.get_file_key()),
+            "Failed to create Encrypter"
+        )?;
 
-        Self {
+        Ok(Self {
             encrypter,
             block_id: 0,
             inner,
             inner_buf: vec![],
-        }
+        })
     }
 
     /// Flush the rest of the inner buffer.

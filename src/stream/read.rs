@@ -1,8 +1,9 @@
 use crate::BLOCK_SIZE;
 use crate::{cipher::Cipher, decrypter::Decrypter};
 use crate::{FILE_HEADER_SIZE, FILE_MAGIC};
-use std::io::Result;
-use std::io::{Error, ErrorKind, Read};
+use std::io::{Error, ErrorKind, Read, Result};
+
+use super::macros::into_io_error;
 
 /// A reader which automatically decrypts encrypted data from an inner reader.
 ///
@@ -35,13 +36,11 @@ impl<R: Read> EncryptedReader<R> {
     /// This header is [`FILE_HEADER_SIZE`](FILE_HEADER_SIZE) bytes long.  
     /// Example: `RCLONE\x00\x00[24 bytes of nonce]`
     ///
-    /// # Panics
-    /// If an instance of [`Cipher`](Cipher) or [`Decrypter`](Decrypter) could not be created, this method will panic.
-    ///
     /// # Errors
     /// The returned [`Result`](Result) could only contain an [`Error`](Error) if:
     /// 1. The file header read from `inner` is invalid, or
-    /// 2. An I/O error occurred while trying to read the file header from `inner`.
+    /// 2. An I/O error occurred while trying to read the file header from `inner`, or
+    /// 3. An instance of [`Cipher`](Cipher) or [`Decrypter`](Decrypter) could not be created.
     pub fn new(mut inner: R, password: String, salt: String) -> Result<Self> {
         let mut header_buf = [0u8; FILE_HEADER_SIZE];
         inner.read_exact(&mut header_buf)?;
@@ -50,8 +49,11 @@ impl<R: Read> EncryptedReader<R> {
             return Err(Error::new(ErrorKind::Other, "Bad Rclone header"));
         }
 
-        let cipher = Cipher::new(password, salt).unwrap();
-        let decrypter = Decrypter::new(&cipher.get_file_key(), &header_buf).unwrap();
+        let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
+        let decrypter = into_io_error!(
+            Decrypter::new(&cipher.get_file_key(), &header_buf),
+            "Failed to create decrypter"
+        )?;
 
         Ok(Self {
             decrypter,
@@ -70,10 +72,10 @@ impl<R: Read> EncryptedReader<R> {
             return Err(Error::new(ErrorKind::Other, "No more data to read"));
         }
 
-        let decrypted = self
-            .decrypter
-            .decrypt_block(self.block_id, &buffer)
-            .unwrap();
+        let decrypted = into_io_error!(
+            self.decrypter.decrypt_block(self.block_id, &buffer),
+            "Failed to decrypt block"
+        )?;
 
         self.inner_buf = decrypted;
 
