@@ -10,9 +10,9 @@ Supported:
 
 * File name encryption
 
-* File data block decryption (currently no streaming interface)
+* File data block decryption (with a streaming interface)
 
-* File data block encryption (currently no streaming interface)
+* File data block encryption (with a streaming interface)
 
 Unsupported:
 
@@ -22,4 +22,4 @@ Unsupported:
 
 * File chunk encryption
 
-There is currently no nice interface with Read + Seek.
+There is currently no nice interface with Seek.
