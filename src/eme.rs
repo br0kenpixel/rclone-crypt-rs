@@ -192,7 +192,7 @@ impl AesEme {
 
         for i in 0..num_blocks {
             // CCj = AES-enc(K; cccj)
-            let mut block = &mut c[i * 16..(i + 1) * 16];
+            let block = &mut c[i * 16..(i + 1) * 16];
             // aes_transform(c[j*16:(j+1)*16], c[j*16:(j+1)*16], direction, bc)
             let result = self
                 .aes_transform(block, &direction)
@@ -201,7 +201,7 @@ impl AesEme {
             // Cj = 2**(j-1)*L xor CCj
             // xorBlocks(c[j*16:(j+1)*16], c[j*16:(j+1)*16], ltable[j])
             let in1 = block.to_vec();
-            xor_blocks(&mut block, &in1, &ltable[i]);
+            xor_blocks(block, &in1, &ltable[i]);
         }
 
         Ok(c)

@@ -2,9 +2,9 @@
 /// AKA base64(aes-ctr(val, static_key)) :-(
 use anyhow::{anyhow, Result};
 
+use aes::Aes256Ctr;
 use cipher::generic_array::GenericArray;
 use cipher::{NewCipher, StreamCipher};
-use aes::Aes256Ctr;
 use sodiumoxide::randombytes::randombytes;
 
 // the static key used for obscuring
@@ -30,7 +30,7 @@ fn crypt(data: &[u8], iv: &[u8]) -> Result<Vec<u8>> {
 
 pub fn reveal(text: &str) -> Result<String> {
     // text is basically: base64(iv + ciphertext)
-    let ciphertext = base64::decode_config(&text, base64::URL_SAFE_NO_PAD)?;
+    let ciphertext = base64::decode_config(text, base64::URL_SAFE_NO_PAD)?;
 
     if ciphertext.len() < OBSCURE_BLOCK_SIZE {
         return Err(anyhow!(
