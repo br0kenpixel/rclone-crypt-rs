@@ -5,6 +5,7 @@ pub mod decrypter;
 mod eme;
 pub mod encrypter;
 pub mod obscure;
+pub mod stream;
 
 pub const FILE_MAGIC: &[u8] = b"RCLONE\x00\x00";
 pub const FILE_NONCE_SIZE: usize = 24;
