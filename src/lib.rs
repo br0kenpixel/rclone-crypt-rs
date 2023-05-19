@@ -1,14 +1,23 @@
 use sodiumoxide::crypto::secretbox;
 
+/// Provides a [`Cipher`](cipher::Cipher) for encrypting
+/// and decrypting file names and paths
 pub mod cipher;
+/// Provides a [`Decrypter`](decrypter::Decrypter) for decrypting data
 pub mod decrypter;
 mod eme;
+/// Provides a [`Encrypter`](encrypter::Encrypter) for encrypting data
 pub mod encrypter;
+/// Obscuring secrects
 pub mod obscure;
+/// Provides streaming interfaces
 pub mod stream;
 
+/// Rclone file header magic
 pub const FILE_MAGIC: &[u8] = b"RCLONE\x00\x00";
+/// Nonce size
 pub const FILE_NONCE_SIZE: usize = 24;
+/// Header size
 pub const FILE_HEADER_SIZE: usize = FILE_MAGIC.len() + FILE_NONCE_SIZE;
 
 // Each block has an authenticated header

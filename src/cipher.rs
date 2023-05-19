@@ -16,6 +16,7 @@ pub type FileKey = [u8; 32];
 pub type NameKey = [u8; 32];
 pub type TweakKey = [u8; eme::NAME_CIPHER_BLOCK_SIZE];
 
+/// Encrypts and decrypts file names and paths.
 #[derive(Clone, Debug)]
 pub struct Cipher {
     /// AES-EME construct. Used for file name crypto.
