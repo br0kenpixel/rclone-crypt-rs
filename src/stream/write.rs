@@ -56,9 +56,9 @@ impl<W: Write> EncryptedWriter<W> {
 
         let encrypted_block = self.encrypter.encrypt_block(self.block_id, &self.inner_buf);
         if self.block_id == 0 {
-            self.inner.write(&self.encrypter.get_file_header())?;
+            self.inner.write_all(&self.encrypter.get_file_header())?;
         }
-        self.inner.write(&encrypted_block)?;
+        self.inner.write_all(&encrypted_block)?;
         self.inner_buf.clear();
         Ok(())
     }
@@ -78,7 +78,7 @@ impl<W: Write> Write for EncryptedWriter<W> {
                 }
                 encrypted.extend(self.encrypter.encrypt_block(self.block_id, &self.inner_buf));
 
-                self.inner.write(&encrypted)?;
+                self.inner.write_all(&encrypted)?;
                 self.block_id += 1;
                 self.inner_buf.clear();
             }
