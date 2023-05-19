@@ -1,9 +1,8 @@
+use super::macros::into_io_error;
 use crate::BLOCK_SIZE;
 use crate::{cipher::Cipher, decrypter::Decrypter};
 use crate::{FILE_HEADER_SIZE, FILE_MAGIC};
 use std::io::{Error, ErrorKind, Read, Result};
-
-use super::macros::into_io_error;
 
 /// A reader which automatically decrypts encrypted data from an inner reader.
 ///
@@ -41,7 +40,13 @@ impl<R: Read> EncryptedReader<R> {
     /// 1. The file header read from `inner` is invalid, or
     /// 2. An I/O error occurred while trying to read the file header from `inner`, or
     /// 3. An instance of [`Cipher`](Cipher) or [`Decrypter`](Decrypter) could not be created.
-    pub fn new(mut inner: R, password: String, salt: String) -> Result<Self> {
+    pub fn new(inner: R, password: String, salt: String) -> Result<Self> {
+        let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
+        Self::new_with_cipher(inner, cipher)
+    }
+
+    /// Same as [`new()`](Self::new), but takes a cipher instead of a password and a salt.
+    pub fn new_with_cipher(mut inner: R, cipher: Cipher) -> Result<Self> {
         let mut header_buf = [0u8; FILE_HEADER_SIZE];
         inner.read_exact(&mut header_buf)?;
 
@@ -49,7 +54,6 @@ impl<R: Read> EncryptedReader<R> {
             return Err(Error::new(ErrorKind::Other, "Bad Rclone header"));
         }
 
-        let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
         let decrypter = into_io_error!(
             Decrypter::new(&cipher.get_file_key(), &header_buf),
             "Failed to create decrypter"

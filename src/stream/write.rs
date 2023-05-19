@@ -35,6 +35,11 @@ impl<W: Write> EncryptedWriter<W> {
     /// of [`Cipher`](Cipher) or [`Encrypter`](Encrypter) could not be created.
     pub fn new(inner: W, password: String, salt: String) -> Result<Self> {
         let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
+        Self::new_with_cipher(inner, cipher)
+    }
+
+    /// Same as [`new()`](Self::new) but takes a cipher instead of a password and a salt.
+    pub fn new_with_cipher(inner: W, cipher: Cipher) -> Result<Self> {
         let encrypter = into_io_error!(
             Encrypter::new(&cipher.get_file_key()),
             "Failed to create Encrypter"
