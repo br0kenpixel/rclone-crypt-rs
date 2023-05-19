@@ -6,7 +6,7 @@ fn test_path_encryption() {
     let password = String::from("test");
     let salt = String::from("test");
 
-    let cipher = Cipher::new(password, salt).unwrap();
+    let cipher = Cipher::new(password, Some(salt)).unwrap();
 
     let path = Path::new("test.txt");
     let encrypted = cipher.encrypt_path(path).unwrap().display().to_string();

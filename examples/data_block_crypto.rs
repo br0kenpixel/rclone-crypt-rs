@@ -18,7 +18,7 @@ fn main() {
     let salt = String::from("salty");
     let segment_content = "and that's how we learn Rust";
 
-    let cipher = match Cipher::new(password, salt) {
+    let cipher = match Cipher::new(password, Some(salt)) {
         Ok(cipher) => cipher,
         Err(e) => {
             eprintln!("Failed to create a Cipher: {e}");

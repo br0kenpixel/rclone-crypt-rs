@@ -6,8 +6,12 @@ fn main() {
     let password = String::from("test");
     let salt = String::from("test");
 
-    let mut reader =
-        EncryptedReader::new(File::open("example_file.bin").unwrap(), password, salt).unwrap();
+    let mut reader = EncryptedReader::new(
+        File::open("example_file.bin").unwrap(),
+        password,
+        Some(salt),
+    )
+    .unwrap();
     let mut buf = String::new();
 
     reader.read_to_string(&mut buf).unwrap();

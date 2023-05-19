@@ -11,6 +11,9 @@ use scrypt::{scrypt, Params};
 use std::path::{Component, Path, PathBuf};
 
 const TOTAL_KEY_SIZE: usize = 32 + 32 + eme::NAME_CIPHER_BLOCK_SIZE; // this should probably be defined more nicely
+const RCLONE_DEFAULT_SALT: [u8; 16] = [
+    0xA8, 0x0D, 0xF4, 0x3A, 0x8F, 0xBD, 0x03, 0x08, 0xA7, 0xCA, 0xB8, 0x3E, 0x58, 0x1F, 0x86, 0xB1,
+];
 
 pub type FileKey = [u8; 32];
 pub type NameKey = [u8; 32];
@@ -33,11 +36,11 @@ pub struct Cipher {
 
 /// Calculates the keys using scrypt.
 /// This key is used together with file nonce to encrypt/decrypt file and name data.
-fn generate_keys(password: &str, salt: &str) -> Result<(FileKey, NameKey, TweakKey)> {
+fn generate_keys(password: &str, salt: &[u8]) -> Result<(FileKey, NameKey, TweakKey)> {
     let params = Params::new(14, 8, 1)?; // log2(16384) = 14
 
     let mut key = [0u8; TOTAL_KEY_SIZE];
-    scrypt(password.as_bytes(), salt.as_bytes(), &params, &mut key)?;
+    scrypt(password.as_bytes(), salt, &params, &mut key)?;
 
     Ok((
         *array_ref!(key, 0, 32),
@@ -60,8 +63,12 @@ fn decode_segment(name: &str) -> Result<Vec<u8>> {
 }
 
 impl Cipher {
-    pub fn new(password: String, salt: String) -> Result<Self> {
-        let keys = generate_keys(&password, &salt)?;
+    pub fn new(password: String, salt: Option<String>) -> Result<Self> {
+        let salt_bytes = match salt {
+            Some(text) => text.as_bytes().to_vec(),
+            None => RCLONE_DEFAULT_SALT.to_vec(),
+        };
+        let keys = generate_keys(&password, &salt_bytes)?;
 
         Ok(Cipher {
             file_key: keys.0,

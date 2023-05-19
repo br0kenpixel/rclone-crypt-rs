@@ -9,7 +9,7 @@ fn main() {
     let password = String::from("super_secret_password");
     let salt = String::from("salty");
 
-    let cipher = match Cipher::new(password, salt) {
+    let cipher = match Cipher::new(password, Some(salt)) {
         Ok(cipher) => cipher,
         Err(e) => {
             eprintln!("Failed to create a Cipher: {e}");

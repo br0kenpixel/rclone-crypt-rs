@@ -40,7 +40,7 @@ impl<R: Read> EncryptedReader<R> {
     /// 1. The file header read from `inner` is invalid, or
     /// 2. An I/O error occurred while trying to read the file header from `inner`, or
     /// 3. An instance of [`Cipher`](Cipher) or [`Decrypter`](Decrypter) could not be created.
-    pub fn new(inner: R, password: String, salt: String) -> Result<Self> {
+    pub fn new(inner: R, password: String, salt: Option<String>) -> Result<Self> {
         let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
         Self::new_with_cipher(inner, cipher)
     }
