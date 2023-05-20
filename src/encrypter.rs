@@ -1,24 +1,22 @@
 use crate::{calculate_nonce, cipher::FileKey, FILE_HEADER_SIZE, FILE_MAGIC};
 use anyhow::Result;
-use crypto_box::{
-    aead::{Aead, AeadCore},
-    rand_core::OsRng,
-    Nonce, PublicKey, SalsaBox, SecretKey,
+use xsalsa20poly1305::{
+    aead::{Aead, KeyInit, OsRng},
+    Nonce, XSalsa20Poly1305,
 };
 
 pub struct Encrypter {
-    secretbox: SalsaBox,
+    key: XSalsa20Poly1305,
     initial_nonce: Nonce,
 }
 
 impl Encrypter {
     pub fn new(file_key: &FileKey) -> Result<Self> {
-        let secret_key = SecretKey::from(*file_key);
-        let public_key = PublicKey::from(&secret_key);
+        let key = XSalsa20Poly1305::new_from_slice(file_key).unwrap();
 
         Ok(Encrypter {
-            secretbox: SalsaBox::new(&public_key, &secret_key),
-            initial_nonce: SalsaBox::generate_nonce(OsRng),
+            key,
+            initial_nonce: XSalsa20Poly1305::generate_nonce(&mut OsRng),
         })
     }
 
@@ -37,6 +35,6 @@ impl Encrypter {
     pub fn encrypt_block(&self, block_id: u64, block: &[u8]) -> Vec<u8> {
         let nonce = self.calculate_nonce(block_id);
 
-        self.secretbox.encrypt(&nonce, block).unwrap()
+        self.key.encrypt(&nonce, block).unwrap()
     }
 }

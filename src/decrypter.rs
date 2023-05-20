@@ -1,23 +1,25 @@
 use crate::{calculate_nonce, cipher::FileKey, FILE_MAGIC};
 use anyhow::{anyhow, Result};
-use crypto_box::{aead::Aead, Nonce, PublicKey, SalsaBox, SecretKey};
+use xsalsa20poly1305::{
+    aead::{Aead, KeyInit},
+    Nonce, XSalsa20Poly1305,
+};
 
 pub struct Decrypter {
-    secretbox: SalsaBox,
+    key: XSalsa20Poly1305,
     initial_nonce: Nonce,
 }
 
 impl Decrypter {
     pub fn new(file_key: &FileKey, file_header: &[u8]) -> Result<Self> {
-        let secret_key = SecretKey::from(*file_key);
+        let key = XSalsa20Poly1305::new_from_slice(file_key).unwrap();
         if &file_header[..FILE_MAGIC.len()] != FILE_MAGIC {
             return Err(anyhow!("Invalid file magic in file"));
         }
-        let public_key = PublicKey::from(&secret_key);
         let nonce = Nonce::from_slice(&file_header[FILE_MAGIC.len()..]);
 
         Ok(Decrypter {
-            secretbox: SalsaBox::new(&public_key, &secret_key),
+            key,
             initial_nonce: *nonce,
         })
     }
@@ -29,6 +31,6 @@ impl Decrypter {
     pub fn decrypt_block(&self, block_id: u64, block: &[u8]) -> Result<Vec<u8>> {
         let nonce = self.calculate_nonce(block_id);
 
-        Ok(self.secretbox.decrypt(&nonce, block).unwrap())
+        Ok(self.key.decrypt(&nonce, block).unwrap())
     }
 }

@@ -23,7 +23,10 @@ pub const BLOCK_HEADER_SIZE: usize = 16;
 pub const BLOCK_DATA_SIZE: usize = 64 * 1024;
 pub const BLOCK_SIZE: usize = BLOCK_HEADER_SIZE + BLOCK_DATA_SIZE;
 
-fn calculate_nonce(initial_nonce: crypto_box::Nonce, block_id: u64) -> crypto_box::Nonce {
+fn calculate_nonce(
+    initial_nonce: xsalsa20poly1305::Nonce,
+    block_id: u64,
+) -> xsalsa20poly1305::Nonce {
     let mut nonce = initial_nonce;
 
     if block_id == 0 {
