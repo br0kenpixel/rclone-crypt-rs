@@ -1,11 +1,8 @@
-/// Rclone's "obscure" implementation
-/// AKA base64(aes-ctr(val, static_key)) :-(
-use anyhow::{anyhow, Result};
-
 use aes::Aes256Ctr;
+use anyhow::{anyhow, Result};
 use cipher::generic_array::GenericArray;
 use cipher::{NewCipher, StreamCipher};
-use sodiumoxide::randombytes::randombytes;
+use rand::prelude::*;
 
 // the static key used for obscuring
 const OBSCURE_CRYPT_KEY: [u8; 32] = [
@@ -61,6 +58,12 @@ pub fn obscure(plaintext: &str) -> Result<String> {
         ciphertext_with_iv,
         base64::URL_SAFE_NO_PAD,
     ))
+}
+
+fn randombytes(amount: usize) -> Vec<u8> {
+    let mut buf = vec![0u8; amount];
+    buf.iter_mut().for_each(|val| *val = random());
+    buf
 }
 
 #[cfg(test)]

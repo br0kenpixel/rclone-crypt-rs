@@ -1,35 +1,35 @@
-use anyhow::{anyhow, Result};
-use sodiumoxide::crypto::secretbox;
-
 use crate::{calculate_nonce, cipher::FileKey, FILE_HEADER_SIZE, FILE_MAGIC};
+use anyhow::Result;
+use crypto_box::{
+    aead::{Aead, AeadCore},
+    rand_core::OsRng,
+    Nonce, PublicKey, SalsaBox, SecretKey,
+};
 
-/// Encrypter instance for a single file.
-/// This is not a managed writer; it must be assisted with a separate reader that passes
-/// it blocks of data to encrypt.
 pub struct Encrypter {
-    key: secretbox::Key,
-    initial_nonce: secretbox::Nonce,
+    secretbox: SalsaBox,
+    initial_nonce: Nonce,
 }
 
 impl Encrypter {
     pub fn new(file_key: &FileKey) -> Result<Self> {
-        sodiumoxide::init().map_err(|_| anyhow!("Could not initialize sodiumoxide"))?;
-        let initial_nonce = secretbox::gen_nonce();
+        let secret_key = SecretKey::from(*file_key);
+        let public_key = PublicKey::from(&secret_key);
 
         Ok(Encrypter {
-            key: secretbox::Key(*file_key),
-            initial_nonce,
+            secretbox: SalsaBox::new(&public_key, &secret_key),
+            initial_nonce: SalsaBox::generate_nonce(OsRng),
         })
     }
 
-    fn calculate_nonce(&self, block_id: u64) -> secretbox::Nonce {
+    fn calculate_nonce(&self, block_id: u64) -> Nonce {
         calculate_nonce(self.initial_nonce, block_id)
     }
 
     pub fn get_file_header(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(FILE_HEADER_SIZE);
         out.extend_from_slice(FILE_MAGIC);
-        out.extend_from_slice(&self.initial_nonce.0);
+        out.extend_from_slice(self.initial_nonce.as_ref());
 
         out
     }
@@ -37,6 +37,6 @@ impl Encrypter {
     pub fn encrypt_block(&self, block_id: u64, block: &[u8]) -> Vec<u8> {
         let nonce = self.calculate_nonce(block_id);
 
-        secretbox::seal(block, &nonce, &self.key)
+        self.secretbox.encrypt(&nonce, block).unwrap()
     }
 }
