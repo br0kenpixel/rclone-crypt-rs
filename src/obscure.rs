@@ -1,10 +1,13 @@
+use aes::{
+    cipher::{NewCipher, StreamCipher},
+    Aes256Ctr,
+};
 /// Rclone's "obscure" implementation
 /// AKA base64(aes-ctr(val, static_key)) :-(
 use anyhow::{anyhow, Result};
-
-use aes::Aes256Ctr;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use cipher::generic_array::GenericArray;
-use cipher::{NewCipher, StreamCipher};
 use sodiumoxide::randombytes::randombytes;
 
 // the static key used for obscuring
@@ -30,7 +33,7 @@ fn crypt(data: &[u8], iv: &[u8]) -> Result<Vec<u8>> {
 
 pub fn reveal(text: &str) -> Result<String> {
     // text is basically: base64(iv + ciphertext)
-    let ciphertext = base64::decode_config(text, base64::URL_SAFE_NO_PAD)?;
+    let ciphertext = URL_SAFE_NO_PAD.decode(text).unwrap();
 
     if ciphertext.len() < OBSCURE_BLOCK_SIZE {
         return Err(anyhow!(
@@ -57,10 +60,7 @@ pub fn obscure(plaintext: &str) -> Result<String> {
     // so no big deal
     let ciphertext_with_iv = [&iv[..], &ciphertext[..]].concat();
 
-    Ok(base64::encode_config(
-        ciphertext_with_iv,
-        base64::URL_SAFE_NO_PAD,
-    ))
+    Ok(URL_SAFE_NO_PAD.encode(ciphertext_with_iv))
 }
 
 #[cfg(test)]

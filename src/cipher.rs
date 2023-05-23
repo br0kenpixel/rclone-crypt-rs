@@ -37,10 +37,11 @@ pub struct Cipher {
 /// Calculates the keys using scrypt.
 /// This key is used together with file nonce to encrypt/decrypt file and name data.
 fn generate_keys(password: &str, salt: &[u8]) -> Result<(FileKey, NameKey, TweakKey)> {
-    let params = Params::new(14, 8, 1)?; // log2(16384) = 14
+    //let params = Params::new(14, 8, 1, TOTAL_KEY_SIZE)?; // log2(16384) = 14
+    let params = Params::new(14, 8, 1, Params::RECOMMENDED_LEN).unwrap();
 
     let mut key = [0u8; TOTAL_KEY_SIZE];
-    scrypt(password.as_bytes(), salt, &params, &mut key)?;
+    scrypt(password.as_bytes(), salt, &params, &mut key)?; /* slow? */
 
     Ok((
         *array_ref!(key, 0, 32),
