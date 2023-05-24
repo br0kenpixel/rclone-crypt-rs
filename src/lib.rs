@@ -1,3 +1,4 @@
+#![allow(clippy::unused_io_amount)]
 use sodiumoxide::crypto::secretbox;
 
 /// Provides a [`Cipher`](cipher::Cipher) for encrypting

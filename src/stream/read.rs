@@ -2,7 +2,7 @@ use super::macros::into_io_error;
 use crate::BLOCK_SIZE;
 use crate::{cipher::Cipher, decrypter::Decrypter};
 use crate::{FILE_HEADER_SIZE, FILE_MAGIC};
-use std::io::{Error, ErrorKind, Read, Result};
+use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
 /// A reader which automatically decrypts encrypted data from an inner reader.
 ///
@@ -20,10 +20,12 @@ use std::io::{Error, ErrorKind, Read, Result};
 /// # Notes
 /// All I/O errors which may occur in the inner reader are passed through to this one.
 pub struct EncryptedReader<R: Read> {
-    decrypter: Decrypter,
-    block_id: u64,
     inner: R,
-    inner_buf: Vec<u8>,
+    decrypter: Decrypter,
+    current_block_id: u64,
+    block_content: Vec<u8>,
+    seek_pos: u64,
+    real_seek_pos: u64,
 }
 
 impl<R: Read> EncryptedReader<R> {
@@ -59,33 +61,60 @@ impl<R: Read> EncryptedReader<R> {
             "Failed to create decrypter"
         )?;
 
+        let mut first_block = vec![0u8; BLOCK_SIZE];
+        let read = inner.read(&mut first_block)?;
+        first_block.truncate(read);
+
+        let decrypted = into_io_error!(
+            decrypter.decrypt_block(0, &first_block),
+            "Failed to decrypt first block"
+        )?;
+
         Ok(Self {
-            decrypter,
-            block_id: 0,
             inner,
-            inner_buf: vec![],
+            decrypter,
+            current_block_id: 0,
+            block_content: decrypted,
+            seek_pos: 0,
+            real_seek_pos: 0,
         })
     }
 
     fn next_chunk(&mut self) -> Result<()> {
-        let mut buffer = vec![0; BLOCK_SIZE];
-        let read = self.inner.read(&mut buffer)?;
-        buffer.truncate(read);
+        let mut block = [0; BLOCK_SIZE];
+        let read = self.inner.read(&mut block)?;
 
         if read == 0 {
             return Err(Error::new(ErrorKind::Other, "No more data to read"));
         }
+        self.current_block_id += 1;
 
         let decrypted = into_io_error!(
-            self.decrypter.decrypt_block(self.block_id, &buffer),
+            self.decrypter.decrypt_block(self.current_block_id, &block),
             "Failed to decrypt block"
         )?;
 
-        self.inner_buf = decrypted;
+        self.block_content = decrypted;
+        Ok(())
+    }
+}
 
-        if read == BLOCK_SIZE {
-            self.block_id += 1;
-        }
+impl<R: Read + Seek> EncryptedReader<R> {
+    fn reset(&mut self) -> Result<()> {
+        self.inner.seek(SeekFrom::Start(FILE_HEADER_SIZE as u64))?;
+        self.current_block_id = 0;
+        self.seek_pos = 0;
+        self.real_seek_pos = 0;
+
+        let mut first_block = vec![0u8; BLOCK_SIZE];
+        let read = self.inner.read(&mut first_block)?;
+        first_block.truncate(read);
+
+        let decrypted = into_io_error!(
+            self.decrypter.decrypt_block(0, &first_block),
+            "Failed to decrypt first block while resetting"
+        )?;
+        self.block_content = decrypted;
         Ok(())
     }
 }
@@ -98,21 +127,67 @@ impl<R: Read> Read for EncryptedReader<R> {
         let mut index = 0;
 
         loop {
-            if self.inner_buf.is_empty() && self.next_chunk().is_err() {
-                break;
-            }
             let Some(ptr) = buf.get_mut(index) else {
                 break;
             };
-            *ptr = self.inner_buf.remove(0);
+            let Some(value) = self.block_content.get(self.seek_pos as usize) else {
+                if self.next_chunk().is_err() {
+                    break;
+                }
+                self.seek_pos = 0;
+                continue;
+            };
 
+            *ptr = *value;
             index += 1;
+            self.seek_pos += 1;
+            self.real_seek_pos += 1;
         }
-
-        if index == 0 {
-            return Ok(0);
-        }
-
         Ok(index)
+    }
+}
+
+/// # Note
+/// Using `SeekFrom::Current(n)` with `n` < 0 is **NOT** supported.
+impl<R: Read + Seek> Seek for EncryptedReader<R> {
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        match pos {
+            SeekFrom::Start(n) => {
+                self.reset()?;
+
+                let mut tmpbuf = vec![0; n as usize];
+                self.read_exact(&mut tmpbuf)
+                    .map_err(|_| Error::new(ErrorKind::UnexpectedEof, "Invalid seek position"))?;
+                Ok(n)
+            }
+            SeekFrom::End(n) => {
+                if n < 0 {
+                    return Err(Error::new(ErrorKind::Unsupported, "Negative seek position"));
+                }
+                let n = n as usize;
+
+                self.reset()?;
+                let mut tmpbuf = Vec::new();
+                self.read_to_end(&mut tmpbuf).unwrap();
+                let file_size = tmpbuf.len();
+
+                self.reset()?;
+                let seek_pos = file_size - n;
+                self.seek(SeekFrom::Start(seek_pos as u64))
+            }
+            SeekFrom::Current(n) => {
+                if n < 0 {
+                    return Err(Error::new(
+                        ErrorKind::Unsupported,
+                        "Backwards seeking with SeekFrom::Current() is not supported",
+                    ));
+                }
+                let current_seek = self.real_seek_pos;
+                let mut tmpbuf = vec![0; n as usize];
+                self.read_exact(&mut tmpbuf)
+                    .map_err(|_| Error::new(ErrorKind::UnexpectedEof, "Invalid seek position"))?;
+                Ok(current_seek + n as u64)
+            }
+        }
     }
 }

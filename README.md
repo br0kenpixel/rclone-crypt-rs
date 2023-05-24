@@ -22,4 +22,4 @@ Unsupported:
 
 * File chunk encryption
 
-There is currently no nice interface with Seek.
+Seeking data block encryption streams is supported with some small limitations.
