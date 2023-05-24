@@ -81,8 +81,9 @@ impl<R: Read> EncryptedReader<R> {
     }
 
     fn next_chunk(&mut self) -> Result<()> {
-        let mut block = [0; BLOCK_SIZE];
+        let mut block = vec![0; BLOCK_SIZE];
         let read = self.inner.read(&mut block)?;
+        block.truncate(read);
 
         if read == 0 {
             return Err(Error::new(ErrorKind::Other, "No more data to read"));
