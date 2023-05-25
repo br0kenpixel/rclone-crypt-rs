@@ -50,7 +50,9 @@ impl<R: Read> EncryptedReader<R> {
     /// Same as [`new()`](Self::new), but takes a cipher instead of a password and a salt.
     pub fn new_with_cipher(mut inner: R, cipher: Cipher) -> Result<Self> {
         let mut header_buf = [0u8; FILE_HEADER_SIZE];
-        inner.read_exact(&mut header_buf)?;
+        inner
+            .read_exact(&mut header_buf)
+            .map_err(|_| Error::new(ErrorKind::Other, "Unable to read header"))?;
 
         if &header_buf[0..FILE_MAGIC.len()] != FILE_MAGIC {
             return Err(Error::new(ErrorKind::Other, "Bad Rclone header"));
