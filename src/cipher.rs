@@ -64,12 +64,9 @@ fn decode_segment(name: &str) -> Result<Vec<u8>> {
 }
 
 impl Cipher {
-    pub fn new(password: String, salt: Option<String>) -> Result<Self> {
-        let salt_bytes = match salt {
-            Some(text) => text.as_bytes().to_vec(),
-            None => RCLONE_DEFAULT_SALT.to_vec(),
-        };
-        let keys = generate_keys(&password, &salt_bytes)?;
+    pub fn new(password: &str, salt: Option<&str>) -> Result<Self> {
+        let salt_bytes = salt.map_or(&RCLONE_DEFAULT_SALT[..], str::as_bytes);
+        let keys = generate_keys(password, salt_bytes)?;
 
         Ok(Cipher {
             file_key: keys.0,

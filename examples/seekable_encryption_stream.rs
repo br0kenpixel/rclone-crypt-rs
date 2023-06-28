@@ -3,9 +3,9 @@ use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 
 fn main() {
-    let password = String::from("test");
-    let salt = String::from("test");
-    let data = String::from("abc123");
+    let password = "test";
+    let salt = "test";
+    let data = "abc123";
 
     let mut writer = SeekableEncryptedWriter::new(
         File::create("example_file.bin").unwrap(),

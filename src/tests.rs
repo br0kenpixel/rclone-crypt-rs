@@ -6,8 +6,8 @@ use std::path::Path;
 
 #[test]
 fn test_path_encryption() {
-    let password = String::from("test");
-    let salt = String::from("test");
+    let password = "test";
+    let salt = "test";
 
     let cipher = Cipher::new(password, Some(salt)).unwrap();
 

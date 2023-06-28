@@ -6,8 +6,8 @@ use rclone_crypt::cipher::Cipher;
 use std::process::exit;
 
 fn main() {
-    let password = String::from("super_secret_password");
-    let salt = String::from("salty");
+    let password = "super_secret_password";
+    let salt = "salty";
 
     let cipher = match Cipher::new(password, Some(salt)) {
         Ok(cipher) => cipher,

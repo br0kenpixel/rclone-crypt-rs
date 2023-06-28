@@ -14,8 +14,8 @@ use rclone_crypt::{cipher::Cipher, decrypter::Decrypter, encrypter::Encrypter};
 use std::process::exit;
 
 fn main() {
-    let password = String::from("super_secret_password");
-    let salt = String::from("salty");
+    let password = "super_secret_password";
+    let salt = "salty";
     let segment_content = "and that's how we learn Rust";
 
     let cipher = match Cipher::new(password, Some(salt)) {

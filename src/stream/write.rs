@@ -33,7 +33,7 @@ impl<W: Write> EncryptedWriter<W> {
     /// # Errors
     /// The returned [`Result`](Result) could only contain an [`Error`](Error) if an instance
     /// of [`Cipher`](Cipher) or [`Encrypter`](Encrypter) could not be created.
-    pub fn new(inner: W, password: String, salt: Option<String>) -> Result<Self> {
+    pub fn new(inner: W, password: &str, salt: Option<&str>) -> Result<Self> {
         let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
         Self::new_with_cipher(inner, cipher)
     }
