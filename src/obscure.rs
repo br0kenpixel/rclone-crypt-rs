@@ -33,7 +33,7 @@ fn crypt(data: &[u8], iv: &[u8]) -> Result<Vec<u8>> {
 
 pub fn reveal(text: &str) -> Result<String> {
     // text is basically: base64(iv + ciphertext)
-    let ciphertext = URL_SAFE_NO_PAD.decode(text).unwrap();
+    let ciphertext = URL_SAFE_NO_PAD.decode(text)?;
 
     if ciphertext.len() < OBSCURE_BLOCK_SIZE {
         return Err(anyhow!(
