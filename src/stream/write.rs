@@ -1,7 +1,5 @@
-use super::macros::into_io_error;
-use crate::BLOCK_DATA_SIZE;
-use crate::{cipher::Cipher, encrypter::Encrypter};
-use std::io::{Error, ErrorKind, Result, Write};
+use crate::{cipher::Cipher, encrypter::Encrypter, BLOCK_DATA_SIZE};
+use std::io::{Error, Result, Write};
 
 /// A writer which automatically encrypts data from an inner reader.
 ///
@@ -19,10 +17,10 @@ use std::io::{Error, ErrorKind, Result, Write};
 /// # Notes
 /// All I/O errors which may occur in the inner reader are passed through to this one.
 pub struct EncryptedWriter<W: Write> {
-    encrypter: Encrypter,
-    block_id: u64,
     inner: W,
-    inner_buf: Vec<u8>,
+    crypto: Encrypter,
+    block: Vec<u8>,
+    block_id: u64,
 }
 
 impl<W: Write> EncryptedWriter<W> {
@@ -34,37 +32,46 @@ impl<W: Write> EncryptedWriter<W> {
     /// The returned [`Result`](Result) could only contain an [`Error`](Error) if an instance
     /// of [`Cipher`](Cipher) or [`Encrypter`](Encrypter) could not be created.
     pub fn new(inner: W, password: &str, salt: Option<&str>) -> Result<Self> {
-        let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
+        let cipher =
+            Cipher::new(password, salt).map_err(|_| Error::other("Failed to create Cipher"))?;
+
         Self::new_with_cipher(inner, cipher)
     }
 
     /// Same as [`new()`](Self::new) but takes a cipher instead of a password and a salt.
     pub fn new_with_cipher(inner: W, cipher: Cipher) -> Result<Self> {
-        let encrypter = into_io_error!(
-            Encrypter::new(&cipher.get_file_key()),
-            "Failed to create Encrypter"
-        )?;
+        let encrypter = Encrypter::new(&cipher.get_file_key())
+            .map_err(|_| Error::other("Failed to create Encrypter"))?;
 
         Ok(Self {
-            encrypter,
-            block_id: 0,
             inner,
-            inner_buf: vec![],
+            crypto: encrypter,
+            block: Vec::new(),
+            block_id: 0,
         })
     }
 
-    /// Flush the rest of the inner buffer.
+    /// Encrypts the current block of data and writes it to the underlying writer.
+    /// If this is called for the first time, the file header is automatically generated and written too.
+    /// If an I/O error occurs, it's returned.
+    ///
+    /// # Notes
+    /// - `block_id` is incremented automatically
+    /// - Calling this on an empty block does nothing
     fn finish(&mut self) -> Result<()> {
-        if self.inner_buf.is_empty() {
+        if self.block.is_empty() {
             return Ok(());
         }
 
-        let encrypted_block = self.encrypter.encrypt_block(self.block_id, &self.inner_buf);
         if self.block_id == 0 {
-            self.inner.write_all(&self.encrypter.get_file_header())?;
+            self.inner.write_all(&self.crypto.get_file_header())?;
         }
-        self.inner.write_all(&encrypted_block)?;
-        self.inner_buf.clear();
+
+        let encrypted = self.crypto.encrypt_block(self.block_id, &self.block);
+        self.inner.write_all(&encrypted)?;
+        self.block.clear();
+        self.block_id += 1;
+
         Ok(())
     }
 }
@@ -74,23 +81,18 @@ impl<W: Write> EncryptedWriter<W> {
 /// All other methods will use their default implementation.
 impl<W: Write> Write for EncryptedWriter<W> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        for byte in buf {
-            if self.inner_buf.len() == BLOCK_DATA_SIZE {
-                let mut encrypted = Vec::new();
+        let block_length = self.block.len();
+        let mut free = BLOCK_DATA_SIZE - block_length;
 
-                if self.block_id == 0 {
-                    encrypted.extend(self.encrypter.get_file_header());
-                }
-                encrypted.extend(self.encrypter.encrypt_block(self.block_id, &self.inner_buf));
-
-                self.inner.write_all(&encrypted)?;
-                self.block_id += 1;
-                self.inner_buf.clear();
-            }
-
-            self.inner_buf.push(*byte);
+        if free == 0 {
+            self.finish()?;
+            free = BLOCK_DATA_SIZE;
         }
-        Ok(buf.len())
+
+        let read = free.clamp(0, buf.len());
+        self.block.extend_from_slice(&buf[..read]);
+
+        Ok(read)
     }
 
     fn flush(&mut self) -> Result<()> {

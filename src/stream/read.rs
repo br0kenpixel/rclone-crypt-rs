@@ -1,8 +1,5 @@
-use super::macros::into_io_error;
-use crate::BLOCK_SIZE;
-use crate::{cipher::Cipher, decrypter::Decrypter};
-use crate::{FILE_HEADER_SIZE, FILE_MAGIC};
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use crate::{cipher::Cipher, decrypter::Decrypter, BLOCK_SIZE, FILE_HEADER_SIZE, FILE_MAGIC};
+use std::io::{Error, Read, Result};
 
 /// A reader which automatically decrypts encrypted data from an inner reader.
 ///
@@ -21,11 +18,9 @@ use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 /// All I/O errors which may occur in the inner reader are passed through to this one.
 pub struct EncryptedReader<R: Read> {
     inner: R,
-    decrypter: Decrypter,
-    current_block_id: u64,
-    block_content: Vec<u8>,
-    seek_pos: u64,
-    real_seek_pos: u64,
+    crypto: Decrypter,
+    block: Vec<u8>,
+    block_id: u64,
 }
 
 impl<R: Read> EncryptedReader<R> {
@@ -43,82 +38,61 @@ impl<R: Read> EncryptedReader<R> {
     /// 2. An I/O error occurred while trying to read the file header from `inner`, or
     /// 3. An instance of [`Cipher`](Cipher) or [`Decrypter`](Decrypter) could not be created.
     pub fn new(inner: R, password: &str, salt: Option<&str>) -> Result<Self> {
-        let cipher = into_io_error!(Cipher::new(password, salt), "Failed to create Cipher")?;
-        Self::new_with_cipher(inner, cipher)
+        Self::new_with_cipher(
+            inner,
+            Cipher::new(password, salt).map_err(|_| Error::other("Failed to create Cipher"))?,
+        )
     }
 
     /// Same as [`new()`](Self::new), but takes a cipher instead of a password and a salt.
     pub fn new_with_cipher(mut inner: R, cipher: Cipher) -> Result<Self> {
         let mut header_buf = [0u8; FILE_HEADER_SIZE];
+        let mut first_block = [0; BLOCK_SIZE];
+
         inner
             .read_exact(&mut header_buf)
-            .map_err(|_| Error::new(ErrorKind::Other, "Unable to read header"))?;
+            .map_err(|_| Error::other("Failed to read header"))?;
 
         if &header_buf[0..FILE_MAGIC.len()] != FILE_MAGIC {
-            return Err(Error::new(ErrorKind::Other, "Bad Rclone header"));
+            return Err(Error::other("Bad Rclone header"));
         }
 
-        let decrypter = into_io_error!(
-            Decrypter::new(&cipher.get_file_key(), &header_buf),
-            "Failed to create decrypter"
-        )?;
+        let decrypter = Decrypter::new(&cipher.get_file_key(), &header_buf)
+            .map_err(|_| Error::other("Failed to create decrypter"))?;
 
-        let mut first_block = vec![0u8; BLOCK_SIZE];
         let read = inner.read(&mut first_block)?;
-        first_block.truncate(read);
-
-        let decrypted = into_io_error!(
-            decrypter.decrypt_block(0, &first_block),
-            "Failed to decrypt first block"
-        )?;
+        let decrypted = decrypter
+            .decrypt_block(0, &first_block[..read])
+            .map_err(|_| Error::other("Failed to decrypt first block"))?;
 
         Ok(Self {
             inner,
-            decrypter,
-            current_block_id: 0,
-            block_content: decrypted,
-            seek_pos: 0,
-            real_seek_pos: 0,
+            crypto: decrypter,
+            block: decrypted,
+            block_id: 0,
         })
     }
 
-    fn next_chunk(&mut self) -> Result<()> {
-        let mut block = vec![0; BLOCK_SIZE];
-        let read = self.inner.read(&mut block)?;
-        block.truncate(read);
+    /// Get and decrypt the next available block.
+    /// If both operations succeed, `Ok(true)` is retuned.
+    /// If we reached the end of the stream, `Ok(false)` is returned.
+    /// If any of these two operations fail, an `Err(...)` variant is returned.
+    fn next_block(&mut self) -> Result<bool> {
+        let mut block_buf = [0; BLOCK_SIZE];
+        let block_id = self.block_id + 1;
+        let read = self.inner.read(&mut block_buf)?;
 
         if read == 0 {
-            return Err(Error::new(ErrorKind::Other, "No more data to read"));
+            return Ok(false);
         }
-        self.current_block_id += 1;
 
-        let decrypted = into_io_error!(
-            self.decrypter.decrypt_block(self.current_block_id, &block),
-            "Failed to decrypt block"
-        )?;
+        let decrypted = self
+            .crypto
+            .decrypt_block(block_id, &block_buf[..read])
+            .map_err(|_| Error::other("Failed to decrypt block"))?;
 
-        self.block_content = decrypted;
-        Ok(())
-    }
-}
-
-impl<R: Read + Seek> EncryptedReader<R> {
-    fn reset(&mut self) -> Result<()> {
-        self.inner.seek(SeekFrom::Start(FILE_HEADER_SIZE as u64))?;
-        self.current_block_id = 0;
-        self.seek_pos = 0;
-        self.real_seek_pos = 0;
-
-        let mut first_block = vec![0u8; BLOCK_SIZE];
-        let read = self.inner.read(&mut first_block)?;
-        first_block.truncate(read);
-
-        let decrypted = into_io_error!(
-            self.decrypter.decrypt_block(0, &first_block),
-            "Failed to decrypt first block while resetting"
-        )?;
-        self.block_content = decrypted;
-        Ok(())
+        self.block = decrypted;
+        Ok(true)
     }
 }
 
@@ -127,70 +101,18 @@ impl<R: Read + Seek> EncryptedReader<R> {
 /// All other methods will use their default implementation.
 impl<R: Read> Read for EncryptedReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let mut index = 0;
-
-        loop {
-            let Some(ptr) = buf.get_mut(index) else {
-                break;
-            };
-            let Some(value) = self.block_content.get(self.seek_pos as usize) else {
-                if self.next_chunk().is_err() {
-                    break;
-                }
-                self.seek_pos = 0;
-                continue;
-            };
-
-            *ptr = *value;
-            index += 1;
-            self.seek_pos += 1;
-            self.real_seek_pos += 1;
-        }
-        Ok(index)
-    }
-}
-
-/// # Note
-/// Using `SeekFrom::Current(n)` with `n` < 0 is **NOT** supported.
-impl<R: Read + Seek> Seek for EncryptedReader<R> {
-    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
-        match pos {
-            SeekFrom::Start(n) => {
-                self.reset()?;
-
-                let mut tmpbuf = vec![0; n as usize];
-                self.read_exact(&mut tmpbuf)
-                    .map_err(|_| Error::new(ErrorKind::UnexpectedEof, "Invalid seek position"))?;
-                Ok(n)
-            }
-            SeekFrom::End(n) => {
-                if n < 0 {
-                    return Err(Error::new(ErrorKind::Unsupported, "Negative seek position"));
-                }
-                let n = n as usize;
-
-                self.reset()?;
-                let mut tmpbuf = Vec::new();
-                self.read_to_end(&mut tmpbuf).unwrap();
-                let file_size = tmpbuf.len();
-
-                self.reset()?;
-                let seek_pos = file_size - n;
-                self.seek(SeekFrom::Start(seek_pos as u64))
-            }
-            SeekFrom::Current(n) => {
-                if n < 0 {
-                    return Err(Error::new(
-                        ErrorKind::Unsupported,
-                        "Backwards seeking with SeekFrom::Current() is not supported",
-                    ));
-                }
-                let current_seek = self.real_seek_pos;
-                let mut tmpbuf = vec![0; n as usize];
-                self.read_exact(&mut tmpbuf)
-                    .map_err(|_| Error::new(ErrorKind::UnexpectedEof, "Invalid seek position"))?;
-                Ok(current_seek + n as u64)
+        if self.block.is_empty() {
+            match self.next_block() {
+                Ok(false) => return Ok(0),
+                Err(why) => return Err(why),
+                _ => (),
             }
         }
+
+        let mut block = &self.block[..];
+        let read = block.read(buf)?;
+        self.block.drain(..read);
+
+        Ok(read)
     }
 }
