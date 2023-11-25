@@ -1,5 +1,4 @@
 mod read;
-mod seekable_write;
 mod write;
 
 mod macros {
@@ -14,5 +13,4 @@ mod macros {
 }
 
 pub use read::EncryptedReader;
-pub use seekable_write::SeekableEncryptedWriter;
 pub use write::EncryptedWriter;
