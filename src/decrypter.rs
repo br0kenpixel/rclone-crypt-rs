@@ -13,14 +13,14 @@ pub struct Decrypter {
 
 impl Decrypter {
     pub fn new(file_key: &FileKey, file_header: &[u8]) -> Result<Self> {
-        sodiumoxide::init().map_err(|_| anyhow!("Could not initialize sodiumoxide"))?;
+        sodiumoxide::init().map_err(|()| anyhow!("Could not initialize sodiumoxide"))?;
         if &file_header[..FILE_MAGIC.len()] != FILE_MAGIC {
             return Err(anyhow!("Invalid file magic in file"));
         }
 
         let nonce = secretbox::Nonce(*array_ref!(file_header, FILE_MAGIC.len(), 24));
 
-        Ok(Decrypter {
+        Ok(Self {
             key: secretbox::Key(*file_key),
             initial_nonce: nonce,
         })
@@ -31,12 +31,12 @@ impl Decrypter {
     }
 
     /// Decrypts a block using the nonce and password state
-    /// The block must be of max BLOCK_SIZE bytes; the final block in the file
+    /// The block must be of max `BLOCK_SIZE` bytes; the final block in the file
     /// may be lower than this but otherwise block will be of that exact size.
     pub fn decrypt_block(&self, block_id: u64, block: &[u8]) -> Result<Vec<u8>> {
         let nonce = self.calculate_nonce(block_id);
 
         secretbox::open(block, &nonce, &self.key)
-            .map_err(|_| anyhow!("Failed to decrypt block of size {}", block.len()))
+            .map_err(|()| anyhow!("Failed to decrypt block of size {}", block.len()))
     }
 }

@@ -1,4 +1,11 @@
-#![allow(clippy::unused_io_amount)]
+#![allow(
+    clippy::similar_names,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::module_name_repetitions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless
+)]
 use sodiumoxide::crypto::secretbox;
 
 /// Provides a [`Cipher`](cipher::Cipher) for encrypting

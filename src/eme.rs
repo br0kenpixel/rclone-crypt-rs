@@ -1,5 +1,5 @@
 /// AES-EME that works with 16-byte blocks up to 2048 bytes.
-/// Adapted from the Golang version: https://github.com/rfjakob/eme
+/// Adapted from the Golang version: <https://github.com/rfjakob/eme>
 use anyhow::{anyhow, Context, Result};
 
 extern crate aes;
@@ -14,6 +14,7 @@ pub const NAME_CIPHER_BLOCK_SIZE: usize = 16; // AES block size
 // AES-256 is used
 pub const EME_KEY_LENGTH: usize = 32;
 
+#[derive(Debug, Clone, Copy)]
 pub enum TransformDirection {
     Encrypt,
     Decrypt,
@@ -44,9 +45,7 @@ fn mult_by_two(data: &mut [u8]) {
 }
 
 fn xor_blocks(out: &mut [u8], in1: &[u8], in2: &[u8]) {
-    if in1.len() != in2.len() {
-        panic!("xorBlocks length must be the same");
-    }
+    assert!(in1.len() == in2.len(), "xorBlocks length must be the same");
 
     for i in 0..in1.len() {
         out[i] = in1[i] ^ in2[i];
@@ -54,8 +53,8 @@ fn xor_blocks(out: &mut [u8], in1: &[u8], in2: &[u8]) {
 }
 
 impl AesEme {
-    pub fn new(key: [u8; EME_KEY_LENGTH]) -> Result<Self> {
-        Ok(AesEme { key })
+    pub const fn new(key: [u8; EME_KEY_LENGTH]) -> Self {
+        Self { key }
     }
 
     fn tabulate_l(&self, m: usize) -> Result<Vec<Vec<u8>>> {
@@ -67,7 +66,7 @@ impl AesEme {
         cipher.encrypt(&mut li, length)?;
 
         // Must be only 16 bytes...
-        let mut li: Vec<u8> = li.iter().take(16).cloned().collect();
+        let mut li: Vec<u8> = li.iter().take(16).copied().collect();
 
         let mut ltable = Vec::new();
 
@@ -79,7 +78,7 @@ impl AesEme {
         Ok(ltable)
     }
 
-    fn aes_transform(&self, data: &[u8], direction: &TransformDirection) -> Result<Vec<u8>> {
+    fn aes_transform(&self, data: &[u8], direction: TransformDirection) -> Result<Vec<u8>> {
         let mut data = data.to_vec();
 
         let cipher = Aes256Ecb::new_from_slices(&self.key, Default::default())?;
@@ -150,8 +149,8 @@ impl AesEme {
             // PPPj = AESenc(K; ppj)
             // aes_transform(c[j*16:(j+1)*16], ppj, direction, bc)
             let result = self
-                .aes_transform(&ppj, &direction)
-                .with_context(|| format!("L131 i = {}", i))?;
+                .aes_transform(&ppj, direction)
+                .with_context(|| format!("L131 i = {i}"))?;
             c[i * 16..(i + 1) * 16].copy_from_slice(&result);
         }
 
@@ -167,7 +166,7 @@ impl AesEme {
         // mc = AESenc(K; mp)
         // aes_transform(mc, mp, direction, bc)
         let mc = self
-            .aes_transform(&mp, &direction)
+            .aes_transform(&mp, direction)
             .with_context(|| "test2".to_string())?;
 
         // m = mp xor mc
@@ -195,7 +194,7 @@ impl AesEme {
             let block = &mut c[i * 16..(i + 1) * 16];
             // aes_transform(c[j*16:(j+1)*16], c[j*16:(j+1)*16], direction, bc)
             let result = self
-                .aes_transform(block, &direction)
+                .aes_transform(block, direction)
                 .with_context(|| "test3".to_string())?;
             block.copy_from_slice(&result);
             // Cj = 2**(j-1)*L xor CCj
@@ -220,7 +219,7 @@ mod tests {
         let tweak = [0u8; 16];
         let plaintext = [0u8; 16];
 
-        let eme = AesEme::new(key)?;
+        let eme = AesEme::new(key);
         let ciphertext = eme.transform(&tweak, &plaintext, TransformDirection::Encrypt)?;
         let back_to_plaintext = eme.transform(&tweak, &ciphertext, TransformDirection::Decrypt)?;
 

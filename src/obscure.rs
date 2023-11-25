@@ -3,7 +3,7 @@ use aes::{
     Aes256Ctr,
 };
 /// Rclone's "obscure" implementation
-/// AKA base64(aes-ctr(val, static_key)) :-(
+/// AKA `base64(aes-ctr(val, static_key))` :-(
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -19,7 +19,7 @@ const OBSCURE_CRYPT_KEY: [u8; 32] = [
 // block size for the cipher
 const OBSCURE_BLOCK_SIZE: usize = 16;
 
-fn crypt(data: &[u8], iv: &[u8]) -> Result<Vec<u8>> {
+fn crypt(data: &[u8], iv: &[u8]) -> Vec<u8> {
     let key = GenericArray::from_slice(&OBSCURE_CRYPT_KEY);
     let nonce = GenericArray::from_slice(iv);
 
@@ -28,7 +28,7 @@ fn crypt(data: &[u8], iv: &[u8]) -> Result<Vec<u8>> {
 
     cipher.apply_keystream(&mut data);
 
-    Ok(data)
+    data
 }
 
 pub fn reveal(text: &str) -> Result<String> {
@@ -46,7 +46,7 @@ pub fn reveal(text: &str) -> Result<String> {
     let buf = &ciphertext[OBSCURE_BLOCK_SIZE..];
     let iv = &ciphertext[0..OBSCURE_BLOCK_SIZE];
 
-    let plaintext = crypt(buf, iv)?;
+    let plaintext = crypt(buf, iv);
     let result = String::from_utf8(plaintext)?;
     Ok(result)
 }
@@ -54,7 +54,7 @@ pub fn reveal(text: &str) -> Result<String> {
 pub fn obscure(plaintext: &str) -> Result<String> {
     let plaintext = plaintext.as_bytes();
     let iv = randombytes(OBSCURE_BLOCK_SIZE);
-    let ciphertext = crypt(plaintext, &iv)?;
+    let ciphertext = crypt(plaintext, &iv);
 
     // inefficient... rclone uses in-place crypt... obscure is only used for configs
     // so no big deal

@@ -39,6 +39,7 @@ impl<W: Write> EncryptedWriter<W> {
     }
 
     /// Same as [`new()`](Self::new) but takes a cipher instead of a password and a salt.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new_with_cipher(inner: W, cipher: Cipher) -> Result<Self> {
         let encrypter = Encrypter::new(&cipher.get_file_key())
             .map_err(|_| Error::other("Failed to create Encrypter"))?;

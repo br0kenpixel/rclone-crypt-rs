@@ -68,10 +68,10 @@ impl Cipher {
         let salt_bytes = salt.map_or(&RCLONE_DEFAULT_SALT[..], str::as_bytes);
         let keys = generate_keys(password, salt_bytes)?;
 
-        Ok(Cipher {
+        Ok(Self {
             file_key: keys.0,
             tweak_key: keys.2,
-            eme: AesEme::new(keys.1)?,
+            eme: AesEme::new(keys.1),
         })
     }
 
@@ -114,9 +114,8 @@ impl Cipher {
         let padded_plaintext = self.eme.decrypt(&self.tweak_key, &decoded)?;
 
         // plaintext, err := pkcs7.Unpad(nameCipherBlockSize, paddedPlaintext)
-        let plaintext = match Pkcs7::unpad(&padded_plaintext) {
-            Ok(x) => x,
-            Err(_) => return Err(anyhow!("Failed to unpad padded plaintext")),
+        let Ok(plaintext) = Pkcs7::unpad(&padded_plaintext) else {
+            return Err(anyhow!("Failed to unpad padded plaintext"));
         };
 
         let plaintext = String::from_utf8(plaintext.to_vec())?;
@@ -167,7 +166,8 @@ impl Cipher {
         Ok(segments.join("/"))
     }
 
-    pub fn get_file_key(&self) -> FileKey {
+    #[must_use]
+    pub const fn get_file_key(&self) -> FileKey {
         self.file_key
     }
 }

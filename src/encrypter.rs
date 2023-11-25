@@ -13,10 +13,10 @@ pub struct Encrypter {
 
 impl Encrypter {
     pub fn new(file_key: &FileKey) -> Result<Self> {
-        sodiumoxide::init().map_err(|_| anyhow!("Could not initialize sodiumoxide"))?;
+        sodiumoxide::init().map_err(|()| anyhow!("Could not initialize sodiumoxide"))?;
         let initial_nonce = secretbox::gen_nonce();
 
-        Ok(Encrypter {
+        Ok(Self {
             key: secretbox::Key(*file_key),
             initial_nonce,
         })
@@ -26,6 +26,7 @@ impl Encrypter {
         calculate_nonce(self.initial_nonce, block_id)
     }
 
+    #[must_use]
     pub fn get_file_header(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(FILE_HEADER_SIZE);
         out.extend_from_slice(FILE_MAGIC);
@@ -34,6 +35,7 @@ impl Encrypter {
         out
     }
 
+    #[must_use]
     pub fn encrypt_block(&self, block_id: u64, block: &[u8]) -> Vec<u8> {
         let nonce = self.calculate_nonce(block_id);
 
